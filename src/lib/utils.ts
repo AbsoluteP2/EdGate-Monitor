@@ -1,4 +1,4 @@
-import type { Status } from "./mock-data";
+import type { Status } from "./api";
 
 export function statusColor(status: Status | string): string {
   switch (status) {
@@ -37,7 +37,7 @@ export function severityBg(severity: string): string {
 }
 
 export function timeAgo(dateStr: string): string {
-  const now = new Date("2026-03-19T23:00:00Z"); // mock "now"
+  const now = new Date();
   const date = new Date(dateStr);
   const diff = now.getTime() - date.getTime();
   const mins = Math.floor(diff / 60000);

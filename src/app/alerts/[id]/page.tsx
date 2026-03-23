@@ -1,18 +1,20 @@
 import Link from "next/link";
-import { alerts, jurisdictions } from "@/lib/mock-data";
+import { fetchChanges, adaptChangeToAlert } from "@/lib/api";
 import { severityBg, timeAgo, confidenceColor } from "@/lib/utils";
 import { notFound } from "next/navigation";
 
-export function generateStaticParams() {
-  return alerts.map(a => ({ id: a.id }));
-}
+export const dynamic = "force-dynamic";
 
 export default async function AlertDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const alert = alerts.find(a => a.id === id);
-  if (!alert) notFound();
 
-  const j = jurisdictions.find(j => j.id === alert.jurisdictionId);
+  // Try to find the change by fetching recent changes and filtering
+  // The API may not support direct ID lookup, so we fetch a batch
+  const res = await fetchChanges({ limit: 200 });
+  const change = res.changes.find(c => c.id === id);
+  if (!change) notFound();
+
+  const alert = adaptChangeToAlert(change);
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -26,10 +28,9 @@ export default async function AlertDetail({ params }: { params: Promise<{ id: st
           <div className="flex-1">
             <h1 className="text-xl font-bold">{alert.title}</h1>
             <div className="flex gap-4 mt-2 text-xs text-zinc-500">
-              <span>Jurisdiction: <Link href={`/jurisdictions/${alert.jurisdictionId}`} className="text-zinc-300 hover:text-green-400">{j?.name}</Link></span>
+              <span>Jurisdiction: <span className="text-zinc-300">{alert.jurisdictionName}</span></span>
               <span>Type: {alert.type.replace(/_/g, " ")}</span>
               <span>{timeAgo(alert.createdAt)}</span>
-              {alert.acknowledged && <span className="text-green-500">✓ Acknowledged</span>}
             </div>
           </div>
           <div className="text-right">
@@ -43,33 +44,38 @@ export default async function AlertDetail({ params }: { params: Promise<{ id: st
         {alert.url && (
           <div className="text-xs">
             <span className="text-zinc-500">Source: </span>
-            <span className="text-zinc-400 font-mono">{alert.url}</span>
+            <a href={alert.url} target="_blank" rel="noopener noreferrer" className="text-zinc-400 font-mono hover:text-green-400">{alert.url}</a>
           </div>
         )}
-      </div>
 
-      {/* Diff View */}
-      {alert.diff && (
-        <div>
-          <h2 className="text-lg font-semibold mb-3">Standards Diff</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-[#1a1d27] rounded-lg border border-red-500/20 p-4">
-              <div className="text-xs text-red-400 font-medium mb-3 uppercase tracking-wide">Previous Version</div>
-              <pre className="text-xs text-zinc-400 whitespace-pre-wrap font-mono leading-relaxed">{alert.diff.old}</pre>
-            </div>
-            <div className="bg-[#1a1d27] rounded-lg border border-green-500/20 p-4">
-              <div className="text-xs text-green-400 font-medium mb-3 uppercase tracking-wide">New Version</div>
-              <pre className="text-xs text-zinc-300 whitespace-pre-wrap font-mono leading-relaxed">
-                {alert.diff.new.split("\n").map((line, i) => (
-                  <span key={i} className={line.includes("NEW") ? "text-green-400 font-semibold" : ""}>
-                    {line}{"\n"}
-                  </span>
-                ))}
-              </pre>
-            </div>
+        {/* Extra metadata from API */}
+        <div className="grid grid-cols-3 gap-4 pt-4 border-t border-zinc-800">
+          <div>
+            <div className="text-xs text-zinc-500">Subject</div>
+            <div className="text-sm">{change.subject || "—"}</div>
+          </div>
+          <div>
+            <div className="text-xs text-zinc-500">Grade Band</div>
+            <div className="text-sm">{change.grade_band || "All"}</div>
+          </div>
+          <div>
+            <div className="text-xs text-zinc-500">Source Category</div>
+            <div className="text-sm">{change.source_category?.replace(/_/g, " ") || "—"}</div>
+          </div>
+          <div>
+            <div className="text-xs text-zinc-500">Affected Publishers</div>
+            <div className="text-sm">{change.affected_publishers?.length > 0 ? change.affected_publishers.join(", ") : "—"}</div>
+          </div>
+          <div>
+            <div className="text-xs text-zinc-500">Affected Products</div>
+            <div className="text-sm">{change.affected_products || "—"}</div>
+          </div>
+          <div>
+            <div className="text-xs text-zinc-500">Est. Effort</div>
+            <div className="text-sm">{change.estimated_effort_days ? `${change.estimated_effort_days} days` : "—"}</div>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Actions */}
       <div className="flex gap-3">
